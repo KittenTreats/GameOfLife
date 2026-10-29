@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Game of Life</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2e38; --text:#e8e9ec; --muted:#9aa0ab; --acc:#4ade80; --warn:#f59e0b; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); font-size:16px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); }
+  h1 { font-size:17px; margin:0; padding:12px 16px 4px; letter-spacing:.3px; }
+  nav { display:flex; gap:4px; padding:6px 12px 10px; }
+  nav button { flex:1; background:var(--card); color:var(--muted); border:1px solid var(--line); border-radius:10px; padding:10px 6px; font-size:15px; }
+  nav button.on { color:#0f1115; background:var(--acc); border-color:var(--acc); font-weight:600; }
+  main { max-width:720px; margin:0 auto; padding:12px 16px 80px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .row > * { flex:1; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; background:#11141a; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:11px; font-size:16px; font-family:inherit; }
+  textarea { min-height:70px; resize:vertical; }
+  .toggle { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); }
+  .toggle:last-child { border-bottom:0; }
+  .toggle b { font-size:17px; }
+  .sw { position:relative; width:58px; height:32px; flex:none; }
+  .sw input { display:none; }
+  .sw span { position:absolute; inset:0; background:#333845; border-radius:32px; transition:.15s; }
+  .sw span:after { content:''; position:absolute; width:26px; height:26px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .sw input:checked + span { background:var(--acc); }
+  .sw input:checked + span:after { transform:translateX(26px); }
+  .sub { margin-top:6px; }
+  .btn { width:100%; background:var(--acc); color:#0f1115; border:0; border-radius:12px; padding:14px; font-size:17px; font-weight:700; margin-top:6px; }
+  .btn:disabled { opacity:.5; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .stat { background:#11141a; border-radius:10px; padding:10px; text-align:center; }
+  .stat .v { font-size:20px; font-weight:700; }
+  .stat .l { font-size:12px; color:var(--muted); }
+  .muted { color:var(--muted); font-size:13px; }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--acc); color:#0f1115; padding:10px 16px; border-radius:10px; font-weight:600; display:none; z-index:10; }
+  .toast.err { background:var(--bad); }
+  .list div { display:flex; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .list div:last-child { border-bottom:0; }
+  .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .tbl { overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; font-size:13px; white-space:nowrap; }
+  td { border:1px solid var(--line); padding:5px 8px; }
+  tr:first-child td { position:sticky; top:0; background:#20242d; font-weight:600; }
+  .daynav { display:flex; gap:8px; }
+  .daynav button { flex:none; width:48px; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:10px; font-size:18px; }
+  .hidden { display:none; }
+  #setup { position:fixed; inset:0; background:var(--bg); z-index:20; padding:24px 16px; overflow:auto; }
+  #setup .card { max-width:520px; margin:0 auto; }
+  .gear { position:absolute; right:12px; top:8px; background:none; border:0; color:var(--muted); font-size:20px; }
+  header { position:sticky; }
+  .del, .yes, .no { background:none; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:4px 8px; font-size:14px; margin-left:6px; }
+  .yes { background:var(--bad); border-color:var(--bad); color:#fff; }
+  .amt { white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎲 Game of Life</h1>
+  <button class="gear" onclick="showSetup()" title="Instellingen">⚙️</button>
+  <nav>
+    <button data-tab="dag" class="on">Vandaag</button>
+    <button data-tab="geld">Uitgave</button>
+    <button data-tab="zien">Inzien</button>
+  </nav>
+</header>
+
+<main>
+  <!-- DAG -->
+  <section id="tab-dag">
+    <div class="card">
+      <div class="daynav">
+        <button onclick="shiftDay(-1)">‹</button>
+        <input type="date" id="dDate" onchange="loadDay()">
+        <button onclick="shiftDay(1)">›</button>
+      </div>
+      <div class="muted" id="dPlan" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <div class="stats" id="stats"></div>
+      <div class="muted" id="lastPdb" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <div class="toggle"><b>🏋️ Gym</b><label class="sw"><input type="checkbox" id="gym"><span></span></label></div>
+      <div class="sub" id="gymBox"><input id="gymWat" placeholder="Wat getraind? (bijv. Rug + Bicep)"></div>
+      <div class="toggle"><b>📚 PDB</b><label class="sw"><input type="checkbox" id="pdb"><span></span></label></div>
+      <div class="sub" id="pdbBox"><input id="pdbWat" placeholder="Wat gedaan? (bijv. HD 3 opdrachten)"></div>
+      <div class="toggle"><b>🍺 Alcohol</b><label class="sw"><input type="checkbox" id="alcohol"><span></span></label></div>
+      <div class="sub" id="alcBox"><input id="alcoholHoeveel" placeholder="Hoeveel?"></div>
+      <div id="extras"></div>
+    </div>
+    <div class="muted" id="missing" style="margin:-4px 0 12px"></div>
+
+    <div class="card">
+      <div class="row">
+        <div><label>Gewicht (kg)</label><input id="gewicht" inputmode="decimal"></div>
+        <div><label>Kcal</label><input id="kcal" inputmode="numeric"></div>
+        <div><label>Dagcijfer</label><input id="dagcijfer" inputmode="decimal" placeholder="1-10"></div>
+      </div>
+      <label>Notities</label><textarea id="notities"></textarea>
+      <label>Journaling (extra activiteiten, dankbaar voor…)</label><textarea id="journaling"></textarea>
+    </div>
+    <button class="btn" id="saveDay" onclick="saveDay()">Opslaan</button>
+  </section>
+
+  <!-- GELD -->
+  <section id="tab-geld" class="hidden">
+    <div class="card">
+      <label>Bedrag (€, altijd positief; terugbetaling = min)</label>
+      <input id="eAmount" inputmode="decimal" placeholder="12,50">
+      <label>Categorie</label>
+      <select id="eCat"></select>
+      <label>Omschrijving</label>
+      <input id="eDesc" placeholder="Albert Heijn">
+      <label>Datum</label>
+      <input type="date" id="eDate">
+      <button class="btn" id="saveExp" onclick="saveExpense()">Toevoegen</button>
+    </div>
+    <div class="card"><div class="kpis" id="kpis"></div></div>
+    <div class="card">
+      <div class="muted" id="logName"></div>
+      <div class="list" id="recent"></div>
+    </div>
+  </section>
+
+  <!-- ZIEN -->
+  <section id="tab-zien" class="hidden">
+    <div class="card">
+      <select id="sheetSel" onchange="loadSheet()"></select>
+    </div>
+    <div class="tbl" id="sheetView"><div class="muted" style="padding:12px">Laden…</div></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<div id="setup" class="hidden">
+  <div class="card">
+    <h2 style="margin-top:0">🔑 Verbinden met je Tracker</h2>
+    <p class="muted">Eenmalig. Deze gegevens blijven alleen op dit apparaat.</p>
+    <label>Web-app-URL (eindigt op /exec)</label>
+    <input id="sUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <label>Sleutel (uit maakSleutel)</label>
+    <input id="sKey" placeholder="64 tekens" autocomplete="off">
+    <button class="btn" onclick="saveSetup()">Verbinden</button>
+    <p class="muted" id="sMsg"></p>
+  </div>
+</div>
+
+<script>
+/* ---- verbinding met Apps Script (vervangt google.script.run) ---- */
+const CFG_KEY = 'gol-config';
+function cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch (e) { return {}; } }
+async function api(fn, args) {
+  const c = cfg();
+  if (!c.url || !c.key) { showSetup(); throw new Error('Nog niet verbonden'); }
+  let res;
+  try {
+    res = await fetch(c.url, { method: 'POST', body: JSON.stringify({ key: c.key, fn: fn, args: args }), redirect: 'follow' });
+  } catch (e) { throw new Error(navigator.onLine ? 'Geen verbinding met je Tracker' : 'Je bent offline'); }
+  let j;
+  try { j = await res.json(); } catch (e) { throw new Error('Onverwacht antwoord. Klopt de URL en staat toegang op "Iedereen"?'); }
+  if (!j.ok) { if (j.error === 'Onjuiste sleutel') showSetup(); throw new Error(j.error); }
+  return j.result;
+}
+// Zelfde vorm als google.script.run, zodat de rest van de app ongewijzigd blijft
+window.google = { script: { get run() {
+  const h = { ok: () => {}, err: e => fail(e) };
+  const o = new Proxy({}, { get(_, name) {
+    if (name === 'withSuccessHandler') return f => { h.ok = f; return o; };
+    if (name === 'withFailureHandler') return f => { h.err = f; return o; };
+    return (...args) => { api(name, args).then(h.ok, h.err); };
+  }});
+  return o;
+} } };
+function showSetup() { const c = cfg(); $('sUrl').value = c.url || ''; $('sKey').value = c.key || ''; $('setup').classList.remove('hidden'); }
+async function saveSetup() {
+  const url = $('sUrl').value.trim(), key = $('sKey').value.trim();
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) { $('sMsg').textContent = 'De URL moet beginnen met https://script.google.com/ en eindigen op /exec'; return; }
+  localStorage.setItem(CFG_KEY, JSON.stringify({ url: url, key: key }));
+  $('sMsg').textContent = 'Verbinden…';
+  try {
+    const r = await api('ping', []);
+    $('sMsg').textContent = '';
+    $('setup').classList.add('hidden');
+    toast('Verbonden met ' + r.spreadsheet + ' ✓');
+    loadDay();
+  } catch (e) { $('sMsg').textContent = '❌ ' + e.message; }
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const FIELDS = ['gewicht','kcal','notities','journaling','dagcijfer','gym','gymWat','alcohol','alcoholHoeveel','pdb','pdbWat'];
+const BOOLS = ['gym','alcohol','pdb'];
+let catsLoaded = false, sheetsLoaded = false;
+
+function today() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function toast(msg, err) { const t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2500); }
+function fail(e) { toast(e.message || String(e), true); document.querySelectorAll('.btn').forEach(b => b.disabled = false); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  ['dag','geld','zien'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
+  if (b.dataset.tab === 'geld' && !catsLoaded) loadMoney();
+  if (b.dataset.tab === 'zien' && !sheetsLoaded) loadSheets();
+});
+
+BOOLS.forEach(k => $(k).addEventListener('change', syncSubs));
+function syncSubs() { $('gymBox').style.display = $('gym').checked ? '' : 'none'; $('pdbBox').style.display = $('pdb').checked ? '' : 'none'; $('alcBox').style.display = $('alcohol').checked ? '' : 'none'; }
+
+/* dag */
+function shiftDay(n) { const d = new Date($('dDate').value + 'T12:00'); d.setDate(d.getDate() + n); $('dDate').value = d.toISOString().slice(0,10); loadDay(); }
+function loadDay() {
+  $('saveDay').disabled = true;
+  google.script.run.withSuccessHandler(fillDay).withFailureHandler(fail).getDay($('dDate').value);
+}
+function fillDay(d) {
+  const f = d.fields || {};
+  FIELDS.forEach(k => { if (BOOLS.includes(k)) $(k).checked = !!f[k]; else $(k).value = f[k] ?? ''; });
+  $('dPlan').textContent = (d.dag ? d.dag + ' · ' : '') + (f.planning || '');
+  $('extras').innerHTML = (d.extras || []).map(e => `<div class="toggle"><b>${esc(e.name)}</b><label class="sw"><input type="checkbox" data-col="${e.col}" ${e.value ? 'checked' : ''}><span></span></label></div>`).join('');
+  $('missing').textContent = (d.missing || []).length ? 'Kolom niet gevonden in rij 1: ' + d.missing.join(', ') + ' (check de kopnaam)' : '';
+  const s = d.stats || {};
+  $('stats').innerHTML = [
+    ['Gym deze week', (s.gymWeek||0) + ' / 3'],
+    ['PDB deze week', s.pdbWeek||0],
+    ['PDB-streak', (s.pdbStreak||0) + ' 🔥'],
+    ['Gym deze maand', s.gymMonth||0],
+    ['PDB deze maand', s.pdbMonth||0],
+    ['Alcohol maand', s.alcoholMonth||0]
+  ].map(x => `<div class="stat"><div class="v">${esc(x[1])}</div><div class="l">${x[0]}</div></div>`).join('');
+  $('lastPdb').textContent = s.lastPdb ? 'Laatste PDB: ' + s.lastPdb : '';
+  syncSubs();
+  $('saveDay').disabled = false;
+}
+function saveDay() {
+  const data = {};
+  FIELDS.forEach(k => data[k] = BOOLS.includes(k) ? $(k).checked : $(k).value);
+  const extras = {};
+  document.querySelectorAll('#extras input[data-col]').forEach(i => extras[i.dataset.col] = i.checked);
+  $('saveDay').disabled = true;
+  google.script.run.withSuccessHandler(d => { fillDay(d); toast('Opgeslagen ✓ +1 XP'); }).withFailureHandler(fail).saveDay($('dDate').value, data, extras);
+}
+
+/* geld */
+function loadMoney() {
+  google.script.run.withSuccessHandler(cats => {
+    let html = '', g = '';
+    cats.forEach(c => { if (c.group !== g) { if (g) html += '</optgroup>'; html += `<optgroup label="${esc(c.group)}">`; g = c.group; } html += `<option>${esc(c.name)}</option>`; });
+    $('eCat').innerHTML = html + '</optgroup>';
+    catsLoaded = true;
+  }).withFailureHandler(fail).getCategories($('eDate').value);
+  google.script.run.withSuccessHandler(fillRecent).withFailureHandler(fail).getRecentExpenses($('eDate').value);
+}
+let recentRows = [], lastKpi = [];
+function fillRecent(r) {
+  recentRows = r.rows;
+  $('logName').textContent = 'Laatste regels in ' + r.sheet;
+  $('recent').innerHTML = r.rows.length ? r.rows.map((x, i) => `<div id="rr${i}"><span>${esc(x.date)} · ${esc(x.desc || x.category)}<br><span class="muted">${esc(x.category)}</span></span><span class="amt">${esc(x.amount)} <button class="del" onclick="askDel(${i})">🗑️</button></span></div>`).join('') : '<div class="muted">Nog niets gelogd.</div>';
+  lastKpi = r.kpi || [];
+  $('kpis').innerHTML = (r.kpi || []).map(k => `<div class="stat"><div class="v" style="font-size:16px">${esc(k.value)}</div><div class="l">${esc(k.label)}</div></div>`).join('');
+}
+function saveExpense() {
+  if (!$('eAmount').value) return toast('Vul een bedrag in', true);
+  $('saveExp').disabled = true;
+  google.script.run.withSuccessHandler(r => {
+    fillRecent(r); $('eAmount').value = ''; $('eDesc').value = ''; $('saveExp').disabled = false; toast('Uitgave gelogd ✓');
+  }).withFailureHandler(fail).addExpense({ date: $('eDate').value, amount: $('eAmount').value, category: $('eCat').value, desc: $('eDesc').value });
+}
+
+function askDel(i) {
+  const x = recentRows[i];
+  $('rr' + i).innerHTML = `<span>${esc(x.amount)} · ${esc(x.desc || x.category)} verwijderen?</span><span><button class="yes" onclick="doDel(${i})">Ja</button> <button class="no" onclick="fillRecent({sheet:$('logName').textContent.replace('Laatste regels in ',''),rows:recentRows,kpi:lastKpi})">Nee</button></span>`;
+}
+function doDel(i) {
+  const x = recentRows[i];
+  google.script.run.withSuccessHandler(r => { fillRecent(r); toast('Verwijderd ✓'); }).withFailureHandler(e => { fail(e); loadMoney(); })
+    .deleteExpense({ ymd: $('eDate').value, row: x.row, date: x.date, desc: x.desc, amount: x.amount, category: x.category });
+}
+
+/* zien */
+function loadSheets() {
+  google.script.run.withSuccessHandler(names => {
+    $('sheetSel').innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
+    sheetsLoaded = true; loadSheet();
+  }).withFailureHandler(fail).getSheetNames();
+}
+function loadSheet() {
+  $('sheetView').innerHTML = '<div class="muted" style="padding:12px">Laden…</div>';
+  google.script.run.withSuccessHandler(v => {
+    $('sheetView').innerHTML = '<table>' + v.rows.map(r => '<tr>' + r.map(c => `<td>${esc(c)}</td>`).join('') + '</tr>').join('') + '</table>';
+  }).withFailureHandler(fail).getSheetView($('sheetSel').value);
+}
+
+const START = '2026-11-01'; // eerste dag in de Tracker
+$('dDate').value = today() < START ? START : today();
+$('eDate').value = today() < START ? START : today();
+if (cfg().url && cfg().key) loadDay(); else showSetup();
+</script>
+</body>
+</html>
